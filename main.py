@@ -2,10 +2,10 @@ import random
 import sys
 import time
 
-import picounicorn
-from math import ceil
 
-picounicorn.init()
+from stellar import StellarUnicorn
+from picographics import PicoGraphics, DISPLAY_STELLAR_UNICORN as DISPLAY
+from math import ceil
 
 
 class Led:
@@ -18,6 +18,8 @@ class Led:
     ORANGE = (255, 120, 50)
     GREY = (150, 150, 150)
 
+    COMMON_COLORS = [RED, GREEN, WHITE, BLUE, YELLOW, PURPLE, ORANGE, GREY]
+
     def __init__(self, x, y, color):
         self.x = x
         self.y = y
@@ -25,17 +27,19 @@ class Led:
 
 
 class UnicornLeds:
-    def __init__(self, w, h, speed=32):
+    def __init__(self, graphics, stellar, speed=32):
+        self.pen_map = {}
+        self.graphics = graphics
+        self.stellar = stellar
         self.speed = speed  # Lower is slower
-        self.uni_width = w
-        self.uni_height = h
+        self.uni_width, self.uni_height = graphics.get_bounds()
         self.leds = []
         self.leds_map = []
         self.deteriorate_speed = 10  # Lower is slower
         self.led_color_add = True
-        for x in range(w):
+        for x in range(self.uni_width):
             row = []
-            for y in range(h):
+            for y in range(self.uni_height):
                 led = Led(x, y, (0, 0, 0))
                 self.leds.append(led)
                 row.append(led)
@@ -45,6 +49,7 @@ class UnicornLeds:
     def change_speed(self, adjustment):
         self.speed = max(self.speed - adjustment, 1)
 
+    @micropython.native
     def set_led_color(self, x, y, color, ignore_add=False):
         if self.led_color_add and not ignore_add:
             led = self.leds_map[x][y]
@@ -56,14 +61,24 @@ class UnicornLeds:
         else:
             self.leds_map[x][y].color = color
 
+    @micropython.native
     def deteriorate(self):
         for led in self.leds:
             r, g, b = [max(color - self.deteriorate_speed, 0) for color in led.color]
             led.color = (r, g, b)
 
+    @micropython.viper
     def update_leds(self):
         for led in self.leds:
-            picounicorn.set_pixel(led.x, led.y, *led.color)
+            pen = self.graphics.create_pen(*led.color)
+            self.graphics.set_pen(pen)
+            self.graphics.pixel(led.x, led.y)
+        self.stellar.update(self.graphics)
+
+    def black_out(self):
+        for led in self.leds:
+            led.color = (0, 0, 0)
+            self.update_leds()
 
     def wait_for_loop(self):
         time.sleep(1 / self.speed)
@@ -83,7 +98,7 @@ class Worm:
         self.led_manager = leds
         self.x = random.randint(0, unicorn_leds.uni_width - 2)
         self.x_speed = self.DEFAULT_SPEED
-        self.y = random.randint(0, unicorn_leds.uni_height - 1)
+        self.y = random.randint(HEIGHT_ADJUST, unicorn_leds.uni_height - 1)
         self.y_speed = 0
         self.turn_chance = 0.25
         self.worm_color = Led.BLUE
@@ -161,7 +176,7 @@ class Worm:
         elif edge == self.EDGE_RIGHT:
             is_touching = self.x >= self.led_manager.uni_width - 1
         elif edge == self.EDGE_BOTTOM:
-            is_touching = self.y == 0
+            is_touching = self.y == HEIGHT_ADJUST
         elif edge == self.EDGE_TOP:
             is_touching = self.y >= self.led_manager.uni_height - 1
         return is_touching
@@ -202,6 +217,9 @@ class Worm:
                 self.x_speed = -self.DEFAULT_SPEED
             else:
                 self.x_speed = self.decide_left_or_right()
+
+    def die(self):
+        self.age = self.MAX_AGE
 
     def is_dead(self):
         return self.life_left() <= 0
@@ -353,37 +371,42 @@ class ChasingWorm(Worm):
 
 
 class ButtonPresses:
-    def __init__(self):
+    def __init__(self, stellar_unicorn):
+        self.stellar_unicorn = stellar_unicorn
         self.button_map = {
-            picounicorn.BUTTON_A: False,
-            picounicorn.BUTTON_B: False,
-            picounicorn.BUTTON_X: False,
-            picounicorn.BUTTON_Y: False,
+            stellar_unicorn.SWITCH_A: False,
+            stellar_unicorn.SWITCH_B: False,
+            stellar_unicorn.SWITCH_C: False,
+            stellar_unicorn.SWITCH_D: False,
         }
 
     def is_pressed(self, uni_button):
         result = False
-        if picounicorn.is_pressed(uni_button) and not self.button_map[uni_button]:
+        if (
+            self.stellar_unicorn.is_pressed(uni_button)
+            and not self.button_map[uni_button]
+        ):
             self.button_map[uni_button] = True
             result = True
-        elif not picounicorn.is_pressed(uni_button):
+        elif not self.stellar_unicorn.is_pressed(uni_button):
             self.button_map[uni_button] = False
         return result
 
+    @micropython.native
     def handle_buttons(self):
         # Button A adds a new worm
-        if self.is_pressed(picounicorn.BUTTON_A):
+        if self.is_pressed(self.stellar_unicorn.SWITCH_A):
             worm = random.choice(worm_collection)
             worms.append(worm(unicorn_leds))
         # Button B deletes the last added worm
-        if self.is_pressed(picounicorn.BUTTON_B):
+        if self.is_pressed(self.stellar_unicorn.SWITCH_B):
             if len(worms) > 0:
                 worms.pop()
         # Button X slows everything down
-        if self.is_pressed(picounicorn.BUTTON_X):
+        if self.is_pressed(self.stellar_unicorn.SWITCH_C):
             unicorn_leds.change_speed(2)
         # And finally, button y speeds it up again
-        if self.is_pressed(picounicorn.BUTTON_Y):
+        if self.is_pressed(self.stellar_unicorn.SWITCH_D):
             unicorn_leds.change_speed(-2)
 
 
@@ -402,14 +425,19 @@ class LifeAndDeath:
     def get_random_worm(self):
         return random.choice(self.worm_collection)(self.unicorn_leds)
 
-    def handle_life_and_death(self):
-        for worm in self.worms:
-            worm.move()
-            if worm.is_dead():
-                self.worms.remove(worm)
-        self.procreate()
+    @micropython.native
+    def handle_life_and_death(self, is_open=True):
+        if not is_open:
+            self.worms.clear()
+        else:
+            for worm in self.worms:
+                worm.move()
+                if worm.is_dead():
+                    self.worms.remove(worm)
+            self.procreate()
 
     # Todo: Worms should have control over procreation themselves
+    @micropython.native
     def procreate(self):
         # Depending on the number of worms, we might not want to procreate
         birth = True
@@ -424,7 +452,9 @@ class LifeAndDeath:
 # Unicorn leds managed a matrix of virtual leds and manages the merging
 # of colors. Changes are made there, before calling the update method that
 # actually updates the screen.
-unicorn_leds = UnicornLeds(picounicorn.get_width(), picounicorn.get_height())
+stellar = StellarUnicorn()
+graphics = PicoGraphics(DISPLAY)
+unicorn_leds = UnicornLeds(graphics, stellar)
 worm_collection = [
     ChasingWorm,
     TurnyWorm,
@@ -436,21 +466,20 @@ worm_collection = [
 ]
 
 # worms = [worm(unicorn_leds) for worm in worm_collection]
-
-
 life_and_death = LifeAndDeath(worm_collection, unicorn_leds)
+
+HEIGHT_ADJUST = 1
 
 # The active worms are used everywhere, I think it justifies a global
 worms = life_and_death.worms
-buttons = ButtonPresses()
+buttons = ButtonPresses(stellar)
 while True:
     buttons.handle_buttons()
-    life_and_death.handle_life_and_death()
+    life_and_death.handle_life_and_death(is_open=True)
 
     # Here we darken all leds a little
     unicorn_leds.deteriorate()
 
     # And this function finally sends the leds to the screen
     unicorn_leds.update_leds()
-
     unicorn_leds.wait_for_loop()
