@@ -37,6 +37,8 @@ class UnicornLeds:
         self.leds_map = []
         self.deteriorate_speed = 10  # Lower is slower
         self.led_color_add = True
+        self.brightness = 1.0
+
         for x in range(self.uni_width):
             row = []
             for y in range(self.uni_height):
@@ -51,6 +53,8 @@ class UnicornLeds:
 
     @micropython.native
     def set_led_color(self, x, y, color, ignore_add=False):
+        if self.brightness < 1:
+            color = [int(rgb * self.brightness) for rgb in color]
         if self.led_color_add and not ignore_add:
             led = self.leds_map[x][y]
             new_color = []
@@ -82,6 +86,9 @@ class UnicornLeds:
 
     def wait_for_loop(self):
         time.sleep(1 / self.speed)
+
+    def change_brightness(self, param):
+        self.brightness = max(MIN_BRIGHTNESS, min(1, self.brightness + param))
 
 
 class Worm:
@@ -370,6 +377,51 @@ class ChasingWorm(Worm):
         return color
 
 
+class ScaredWorm(Worm):
+    def __init__(self, leds):
+        super().__init__(leds)
+        self.scare_factor = 2
+        self.worm_color = Led.GREY
+        self.worm_second_color = Led.WHITE
+
+    def move(self):
+        super().move()
+        # This worm tries to find another worm and chase that
+        if not self.is_touching_any_edge():
+            closest_worm = None
+            for worm in worms:
+                if worm != self:
+                    # Find the closest worm
+                    if not closest_worm or self.distance_to(worm) < self.distance_to(
+                        closest_worm
+                    ):
+                        closest_worm = worm
+
+            # Only chase if further away than 2 spaces
+            if closest_worm:
+                if self.x <= closest_worm.x <= (self.x + self.scare_factor):
+                    self.x_speed = -self.DEFAULT_SPEED
+                    self.y_speed = 0
+                elif self.x >= closest_worm.x >= (self.x - self.scare_factor):
+                    self.x_speed = self.DEFAULT_SPEED
+                    self.y_speed = 0
+
+                if self.y <= closest_worm.y <= (self.y + self.scare_factor):
+                    self.y_speed = -self.DEFAULT_SPEED
+                    self.x_speed = 0
+                elif self.y >= closest_worm.y >= (self.y - self.scare_factor):
+                    self.y_speed = self.DEFAULT_SPEED
+                    self.x_speed = 0
+
+    def distance_to(self, worm):
+        return abs(self.x - worm.x) + abs(self.y - worm.y)
+
+    def get_worm_color(self):
+        color = self.worm_second_color if self.age % 2 == 0 else self.worm_color
+        color = self.age_worm_color(color)
+        return color
+
+
 class ButtonPresses:
     def __init__(self, stellar_unicorn):
         self.stellar_unicorn = stellar_unicorn
@@ -408,6 +460,11 @@ class ButtonPresses:
         # And finally, button y speeds it up again
         if self.is_pressed(self.stellar_unicorn.SWITCH_D):
             unicorn_leds.change_speed(-2)
+
+        if self.is_pressed(self.stellar_unicorn.SWITCH_BRIGHTNESS_UP):
+            unicorn_leds.change_brightness(0.1)
+        if self.is_pressed(self.stellar_unicorn.SWITCH_BRIGHTNESS_DOWN):
+            unicorn_leds.change_brightness(-0.1)
 
 
 class LifeAndDeath:
@@ -457,6 +514,7 @@ graphics = PicoGraphics(DISPLAY)
 unicorn_leds = UnicornLeds(graphics, stellar)
 worm_collection = [
     ChasingWorm,
+    ScaredWorm,
     TurnyWorm,
     StraightWorm,
     WallWorm,
@@ -469,6 +527,7 @@ worm_collection = [
 life_and_death = LifeAndDeath(worm_collection, unicorn_leds)
 
 HEIGHT_ADJUST = 1
+MIN_BRIGHTNESS = 0.3
 
 # The active worms are used everywhere, I think it justifies a global
 worms = life_and_death.worms
