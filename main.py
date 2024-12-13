@@ -1,7 +1,7 @@
 import random
 import sys
 import time
-
+import machine
 
 from stellar import StellarUnicorn
 from picographics import PicoGraphics, DISPLAY_STELLAR_UNICORN as DISPLAY
@@ -465,6 +465,8 @@ class ButtonPresses:
             unicorn_leds.change_brightness(0.1)
         if self.is_pressed(self.stellar_unicorn.SWITCH_BRIGHTNESS_DOWN):
             unicorn_leds.change_brightness(-0.1)
+        if self.is_pressed(self.stellar_unicorn.SWITCH_SLEEP):
+            machine.reset()
 
 
 class LifeAndDeath:
