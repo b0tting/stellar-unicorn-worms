@@ -1,4 +1,4 @@
-# This is a seperate script that converts the png files to an RGB dictionary that can be used in the main.py file.
+# Description: Converts a PNG / JPG whatever file to a dictionary or array of arrays of RGB values
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -23,6 +23,8 @@ class PNGConverter:
 
     def convert_to_iterable(self, resize_width: int = 16, resize_height: int = 16, return_dict=True):
         image = PNGConverter.load_image(self.file)
+        resize_height = int(resize_height) if resize_height else image.height
+        resize_width = int(resize_width) if resize_width else image.width
         if self.resize_needed(image, resize_width, resize_height):
             self.log(f"Image currently {image.width}x{image.height}")
             self.log(f"Resizing image to {resize_width}x{resize_height}")
@@ -78,10 +80,13 @@ class PNGConverter:
 if __name__ == "__main__":
     argparse = ArgumentParser()
     argparse.add_argument("--file", type=str, help="The image file to convert to a dictionary")
-    argparse.add_argument("--resize-width", type=int, default=16, help="The resized width of the image")
-    argparse.add_argument("--resize-height", type=int, default=16, help="The resized height of the image")
+    argparse.add_argument("--resize-width", type=int, default=0, help="The resized width of the image")
+    argparse.add_argument("--resize-height", type=int, default=0, help="The resized height of the image")
+    argparse.add_argument("--return-dict", action="store_true", default=False, help="Return a dictionary instead of an array of arrays")
+    argparse.add_argument("--verbose", action="store_true", help="Print verbose output")
+
 
     args = argparse.parse_args()
-    converter = PNGConverter(file=args.file, verbose=True)
-    rgb_arrays = converter.convert_to_iterable(args.resize_width, args.resize_height, return_dict=False)
+    converter = PNGConverter(file=args.file, verbose=args.verbose)
+    rgb_arrays = converter.convert_to_iterable(args.resize_width, args.resize_height, return_dict=args.return_dict)
     print(rgb_arrays)
