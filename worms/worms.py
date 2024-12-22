@@ -13,9 +13,16 @@ class Worm:
     EDGE_RIGHT = 2
     EDGE_TOP = 3
     EDGE_BOTTOM = 4
+
+    # How long the worm can live
     MAX_AGE = 5000
+
+    # From which age the worm has a chance to die
     DYING_BOUNDARY = 1000
+
+    # How much the worm slows down when dying
     AGE_SLOWDOWN = 6
+
     DEFAULT_SPEED = 1
 
     def __init__(self, leds: UnicornLeds, worms=None, height_adjust=1):

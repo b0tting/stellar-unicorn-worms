@@ -2,10 +2,10 @@ import builtins
 import time
 
 from worms.led import Led
-
+from worms.logos import vopak_logo
 
 class UnicornLeds:
-    def __init__(self, graphics, stellar, fps=60, min_brightness=0.1):
+    def __init__(self, graphics, stellar, fps=60, min_brightness=0.1, start_brightness=0.5):
         self.pen_map = {}
         self.graphics = graphics
         self.stellar = stellar
@@ -17,7 +17,7 @@ class UnicornLeds:
         self.leds_map = []
         self.deteriorate_speed = 10  # Lower is slower
         self.led_color_add = True
-        self.brightness = 0.7
+        self.brightness = start_brightness
         self.min_brightness = min_brightness
         self.stellar.set_brightness(self.brightness)
         self.last_update = time.ticks_ms()
@@ -25,7 +25,7 @@ class UnicornLeds:
         for x in range(self.uni_width):
             row = []
             for y in range(self.uni_height):
-                led = Led(x, y, [0, 0, 0])
+                led = Led(x, y, vopak_logo[x][y])
                 self.leds.append(led)
                 row.append(led)
             self.leds_map.append(row)
@@ -54,9 +54,9 @@ class UnicornLeds:
     def update_leds(self):
         for led in self.leds:
             # Update the color in the LED object
-            led.color[0] = max(led.color[0] - self.deteriorate_speed, 0)
-            led.color[1] = max(led.color[1] - self.deteriorate_speed, 0)
-            led.color[2] = max(led.color[2] - self.deteriorate_speed, 0)
+            led.color[0] = max(led.color[0] - self.deteriorate_speed, vopak_logo[led.x][led.y][0])
+            led.color[1] = max(led.color[1] - self.deteriorate_speed, vopak_logo[led.x][led.y][1])
+            led.color[2] = max(led.color[2] - self.deteriorate_speed, vopak_logo[led.x][led.y][2])
 
             # Update the color on the screen
             self.graphics.set_pen(self.graphics.create_pen(*led.color))

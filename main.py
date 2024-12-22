@@ -8,6 +8,7 @@ from worms.unicorn_leds import UnicornLeds
 from worms.button_presses import ButtonPresses
 from worms.life_and_death import LifeAndDeath
 MIN_BRIGHTNESS = 0.2
+START_BRIGHTNESS = 0.3
 
 # these two are the modules already set up by Pimoroni
 stellar = StellarUnicorn()
@@ -16,7 +17,7 @@ graphics = PicoGraphics(DISPLAY)
 # Unicorn leds managed a matrix of virtual leds and manages the merging
 # of colors. Changes are made there, before calling the update method that
 # actually updates the screen.
-unicorn_leds = UnicornLeds(graphics, stellar, min_brightness=MIN_BRIGHTNESS)
+unicorn_leds = UnicornLeds(graphics, stellar, min_brightness=MIN_BRIGHTNESS, start_brightness=START_BRIGHTNESS)
 
 # Life and death manages the worms and their procreation
 life_and_death = LifeAndDeath(worm_collection, unicorn_leds)
